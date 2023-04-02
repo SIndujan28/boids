@@ -14,7 +14,7 @@ type Boid struct {
 
 func (b *Boid) calculateAcceleration() Vector2D {
 	upper, lower := b.position.AddV(viewRadius), b.position.AddV(-viewRadius)
-	avgPosition, avgVelocity := Vector2D{x: 0, y: 0}, Vector2D{x: 0, y: 0}
+	avgPosition, avgVelocity, separation := Vector2D{x: 0, y: 0}, Vector2D{x: 0, y: 0}, Vector2D{x: 0, y: 0}
 	count := 0.0
 
 	rWlock.RLock()
@@ -25,21 +25,34 @@ func (b *Boid) calculateAcceleration() Vector2D {
 					count++
 					avgVelocity = avgVelocity.Add(boids[otherBoidId].velocity)
 					avgPosition = avgPosition.Add(boids[otherBoidId].position)
+					separation = separation.Add(b.position.Subtract(boids[otherBoidId].position).DivisionV(dist))
 				}
 			}
 		}
 	}
 	rWlock.RUnlock()
-	accel := Vector2D{x: 0, y: 0}
+	accel := Vector2D{x: b.borderBounce(b.position.x, screenWidth), y: b.borderBounce(b.position.y, screenHeight)}
 	if count > 0 {
 		avgPosition, avgVelocity = avgPosition.DivisionV(count), avgVelocity.DivisionV(count)
 		accelAlignment := avgVelocity.Subtract(b.velocity).MultiplyV(adjRate)
 		accelCohesion := avgPosition.Subtract(b.position).MultiplyV(adjRate)
-		accel = accel.Add(accelAlignment).Add(accelCohesion)
+		accelSeparation := separation.MultiplyV(adjRate)
+		accel = accel.Add(accelAlignment).Add(accelCohesion).Add(accelSeparation)
 	}
 
 	return accel
 }
+
+func (b *Boid) borderBounce(pos, maxBorderPos float64) float64 {
+
+	if pos < viewRadius {
+		return 1 / pos
+	} else if pos > maxBorderPos-viewRadius {
+		return 1 / (pos - maxBorderPos)
+	}
+	return 0
+}
+
 func (b *Boid) moveOne() {
 	acceleration := b.calculateAcceleration()
 	rWlock.Lock()
@@ -47,13 +60,7 @@ func (b *Boid) moveOne() {
 	boidMap[int(b.position.x)][int(b.position.y)] = -1
 	b.position = b.position.Add(b.velocity)
 	boidMap[int(b.position.x)][int(b.position.y)] = b.id
-	next := b.position.Add(b.velocity)
-	if next.x >= screenWidth || next.x < 0 {
-		b.velocity = Vector2D{x: -b.velocity.x, y: b.velocity.y}
-	}
-	if next.y >= screenHeight || next.y < 0 {
-		b.velocity = Vector2D{x: b.velocity.x, y: -b.velocity.y}
-	}
+
 	rWlock.Unlock()
 }
 
@@ -70,7 +77,7 @@ func createBoid(bid int) {
 		velocity: Vector2D{x: (rand.Float64() * 2) - 1.0, y: (rand.Float64() * 2) - 1.0},
 		id:       bid,
 	}
-	boidMap[int(b.position.x)][int(b.position.y)] = b.id
 	boids[bid] = &b
+	boidMap[int(b.position.x)][int(b.position.y)] = b.id
 	go b.start()
 }
