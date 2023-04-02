@@ -17,7 +17,7 @@ func (b *Boid) calculateAcceleration() Vector2D {
 	avgPosition, avgVelocity := Vector2D{x: 0, y: 0}, Vector2D{x: 0, y: 0}
 	count := 0.0
 
-	lock.Lock()
+	rWlock.RLock()
 	for i := math.Max(lower.x, 0); i <= math.Min(upper.x, screenWidth); i++ {
 		for j := math.Max(lower.y, 0); j <= math.Min(upper.y, screenHeight); j++ {
 			if otherBoidId := boidMap[int(i)][int(j)]; otherBoidId != -1 && otherBoidId != b.id {
@@ -29,7 +29,7 @@ func (b *Boid) calculateAcceleration() Vector2D {
 			}
 		}
 	}
-	lock.Unlock()
+	rWlock.RUnlock()
 	accel := Vector2D{x: 0, y: 0}
 	if count > 0 {
 		avgPosition, avgVelocity = avgPosition.DivisionV(count), avgVelocity.DivisionV(count)
@@ -42,7 +42,7 @@ func (b *Boid) calculateAcceleration() Vector2D {
 }
 func (b *Boid) moveOne() {
 	acceleration := b.calculateAcceleration()
-	lock.Lock()
+	rWlock.Lock()
 	b.velocity = b.velocity.Add(acceleration).limit(-1, 1)
 	boidMap[int(b.position.x)][int(b.position.y)] = -1
 	b.position = b.position.Add(b.velocity)
@@ -54,7 +54,7 @@ func (b *Boid) moveOne() {
 	if next.y >= screenHeight || next.y < 0 {
 		b.velocity = Vector2D{x: b.velocity.x, y: -b.velocity.y}
 	}
-	lock.Unlock()
+	rWlock.Unlock()
 }
 
 func (b *Boid) start() {
